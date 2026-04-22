@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeFi Credit Score — On-Chain Wallet Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #030508;
+    --surface: #0a0e14;
+    --border: rgba(255,255,255,0.06);
+    --border-bright: rgba(255,255,255,0.12);
+    --text: #e8eaf0;
+    --muted: #5a6070;
+    --dim: #2a3040;
+    --green: #1aeb8a;
+    --green-dim: rgba(26,235,138,0.15);
+    --green-glow: rgba(26,235,138,0.06);
+    --blue: #4f8ef7;
+    --amber: #f0a030;
+    --red: #f05050;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── NOISE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    opacity: 0.025;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── GRID BG ── */
+  .grid-bg {
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(26,235,138,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(26,235,138,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── GLOW ── */
+  .glow-orb {
+    position: fixed;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(26,235,138,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+    top: -200px; right: -200px;
+  }
+  .glow-orb-2 {
+    position: fixed;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(79,142,247,0.05) 0%, transparent 70%);
+    bottom: -100px; left: -100px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  main { position: relative; z-index: 1; }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 48px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(3,5,8,0.85);
+    backdrop-filter: blur(20px);
+    z-index: 100;
+  }
+  .nav-logo {
+    font-family: var(--sans);
+    font-size: 14px; font-weight: 700;
+    letter-spacing: .08em;
+    color: var(--green);
+  }
+  .nav-logo span { color: var(--muted); font-weight: 400; }
+  .nav-links { display: flex; gap: 32px; }
+  .nav-links a {
+    font-size: 12px; color: var(--muted);
+    text-decoration: none; letter-spacing: .06em;
+    transition: color .2s;
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-badge {
+    font-size: 11px; background: var(--green-dim);
+    color: var(--green); padding: 5px 14px;
+    border: 1px solid rgba(26,235,138,0.2);
+    border-radius: 2px; letter-spacing: .08em;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: flex-start;
+    padding: 120px 48px 80px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .hero-eyebrow {
+    font-size: 11px; letter-spacing: .16em;
+    color: var(--green); margin-bottom: 24px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .hero-eyebrow::before {
+    content: '';
+    width: 28px; height: 1px;
+    background: var(--green);
+  }
+
+  .hero-title {
+    font-family: var(--sans);
+    font-size: clamp(52px, 7vw, 96px);
+    font-weight: 800;
+    line-height: .96;
+    letter-spacing: -.03em;
+    margin-bottom: 28px;
+  }
+  .hero-title .accent { color: var(--green); }
+  .hero-title .dim { color: var(--dim); }
+
+  .hero-sub {
+    font-size: 15px; color: var(--muted);
+    max-width: 520px; line-height: 1.7;
+    margin-bottom: 48px;
+  }
+
+  .hero-actions { display: flex; gap: 14px; align-items: center; margin-bottom: 80px; }
+
+  .btn-primary {
+    font-family: var(--mono); font-size: 12px;
+    letter-spacing: .08em;
+    background: var(--green); color: #030508;
+    padding: 13px 28px;
+    border: none; cursor: pointer;
+    border-radius: 2px;
+    font-weight: 500;
+    transition: opacity .2s, transform .1s;
+    text-decoration: none; display: inline-block;
+  }
+  .btn-primary:hover { opacity: .85; transform: translateY(-1px); }
+  .btn-secondary {
+    font-family: var(--mono); font-size: 12px;
+    letter-spacing: .08em;
+    background: transparent; color: var(--text);
+    padding: 12px 28px;
+    border: 1px solid var(--border-bright); cursor: pointer;
+    border-radius: 2px;
+    transition: border-color .2s, transform .1s;
+    text-decoration: none; display: inline-block;
+  }
+  .btn-secondary:hover { border-color: rgba(255,255,255,.3); transform: translateY(-1px); }
+
+  /* ── STAT ROW ── */
+  .stat-row {
+    display: flex; gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .stat-item {
+    padding: 20px 32px;
+    border-right: 1px solid var(--border);
+  }
+  .stat-item:last-child { border-right: none; }
+  .stat-num {
+    font-family: var(--sans); font-size: 32px; font-weight: 700;
+    color: var(--text); line-height: 1;
+  }
+  .stat-num .unit { font-size: 18px; color: var(--green); }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 5px; letter-spacing: .06em; }
+
+  /* ── SECTION ── */
+  section {
+    max-width: 1100px; margin: 0 auto;
+    padding: 80px 48px;
+  }
+  .section-tag {
+    font-size: 10px; letter-spacing: .18em; color: var(--muted);
+    margin-bottom: 40px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-tag::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .section-title {
+    font-family: var(--sans); font-size: clamp(28px, 3.5vw, 44px);
+    font-weight: 700; line-height: 1.1;
+    letter-spacing: -.02em; margin-bottom: 16px;
+  }
+  .section-sub { font-size: 14px; color: var(--muted); max-width: 460px; line-height: 1.7; }
+
+  /* ── FEATURE GRID ── */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 48px;
+  }
+  .feature-cell {
+    background: var(--surface);
+    padding: 28px 24px;
+    transition: background .2s;
+  }
+  .feature-cell:hover { background: #0d1219; }
+  .feature-icon {
+    width: 36px; height: 36px;
+    background: var(--green-dim);
+    border: 1px solid rgba(26,235,138,0.15);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px;
+    font-size: 16px;
+  }
+  .feature-name {
+    font-family: var(--sans); font-size: 14px; font-weight: 600;
+    color: var(--text); margin-bottom: 8px;
+  }
+  .feature-desc { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+  /* ── SCORE DEMO ── */
+  .score-demo {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 48px;
+    margin-top: 48px; align-items: start;
+  }
+
+  .score-card {
+    border: 1px solid var(--border);
+    border-radius: 3px; overflow: hidden;
+  }
+  .score-card-header {
+    padding: 14px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--muted); letter-spacing: .08em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .dot-green { background: var(--green); }
+  .dot-amber { background: var(--amber); }
+  .dot-red   { background: var(--red); }
+
+  .score-card-body { padding: 24px 20px; }
+
+  .big-score {
+    font-family: var(--sans); font-size: 72px; font-weight: 800;
+    line-height: 1; color: var(--green);
+    margin-bottom: 4px;
+  }
+  .score-band-txt {
+    font-size: 12px; letter-spacing: .1em;
+    color: var(--green); margin-bottom: 20px;
+  }
+  .score-bar-track {
+    width: 100%; height: 6px;
+    background: var(--dim); border-radius: 3px;
+    margin-bottom: 20px; position: relative;
+  }
+  .score-bar-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--red) 0%, var(--amber) 40%, var(--green) 80%);
+    width: 91%;
+  }
+  .score-bar-needle {
+    position: absolute; top: -3px;
+    width: 2px; height: 12px;
+    background: white; border-radius: 1px;
+    left: 91%; transform: translateX(-50%);
+  }
+  .score-factors { display: flex; flex-direction: column; gap: 7px; }
+  .factor-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--muted);
+  }
+  .factor-indicator { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .pos { background: var(--green); }
+  .neg { background: var(--red); }
+
+  .decision-box {
+    margin-top: 20px; padding: 12px 16px;
+    background: var(--green-dim);
+    border: 1px solid rgba(26,235,138,.2);
+    border-radius: 2px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .decision-label { font-size: 12px; color: var(--muted); }
+  .decision-val {
+    font-family: var(--sans); font-size: 13px;
+    font-weight: 700; color: var(--green); letter-spacing: .08em;
+  }
+
+  /* ── CODE BLOCK ── */
+  .code-block {
+    border: 1px solid var(--border);
+    border-radius: 3px; overflow: hidden;
+  }
+  .code-header {
+    padding: 12px 18px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .code-header span { font-size: 11px; color: var(--muted); margin-left: 4px; }
+  .code-body {
+    padding: 20px 18px;
+    font-size: 12px;
+    line-height: 1.8;
+    color: #8899cc;
+    overflow-x: auto;
+  }
+  .code-body .k { color: #7b8edd; }
+  .code-body .s { color: #a0c060; }
+  .code-body .n { color: var(--green); }
+  .code-body .c { color: var(--muted); }
+  .code-body .v { color: #f0a030; }
+  .code-body .p { color: #cc88cc; }
+
+  /* ── PIPELINE ── */
+  .pipeline {
+    display: flex; align-items: stretch; gap: 0;
+    margin-top: 48px;
+  }
+  .pipe-step {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-right: none;
+    padding: 24px 18px;
+    background: var(--surface);
+    position: relative;
+  }
+  .pipe-step:last-child { border-right: 1px solid var(--border); }
+  .pipe-step::after {
+    content: '→';
+    position: absolute; right: -12px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted); font-size: 14px; z-index: 2;
+    background: var(--surface);
+    padding: 2px 0;
+  }
+  .pipe-step:last-child::after { display: none; }
+  .pipe-num {
+    font-size: 10px; color: var(--muted); letter-spacing: .1em;
+    margin-bottom: 8px;
+  }
+  .pipe-name {
+    font-family: var(--sans); font-size: 13px; font-weight: 600;
+    color: var(--text); margin-bottom: 6px;
+  }
+  .pipe-detail { font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+  /* ── METRICS ── */
+  .metrics-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 16px; margin-top: 48px;
+  }
+  .metric-block {
+    border: 1px solid var(--border);
+    border-radius: 3px; padding: 24px 20px;
+    background: var(--surface);
+    position: relative; overflow: hidden;
+  }
+  .metric-block::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .metric-block.best::before { background: var(--green); }
+  .metric-block.second::before { background: var(--blue); }
+  .metric-block.third::before { background: var(--amber); }
+  .model-name { font-size: 11px; color: var(--muted); letter-spacing: .06em; margin-bottom: 12px; }
+  .auc-val {
+    font-family: var(--sans); font-size: 38px; font-weight: 700;
+    color: var(--text); line-height: 1;
+  }
+  .auc-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .auc-bar-track {
+    width: 100%; height: 4px; background: var(--dim);
+    border-radius: 2px; margin-top: 14px;
+  }
+  .auc-bar-fill { height: 100%; border-radius: 2px; }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 48px;
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 1100px; margin: 0 auto;
+  }
+  .footer-left { font-size: 11px; color: var(--muted); }
+  .footer-links { display: flex; gap: 24px; }
+  .footer-links a { font-size: 11px; color: var(--muted); text-decoration: none; }
+  .footer-links a:hover { color: var(--text); }
+
+  /* ── SCROLL ANIMATIONS ── */
+  .reveal { opacity: 0; transform: translateY(20px); transition: opacity .6s, transform .6s; }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  @media (max-width: 768px) {
+    nav { padding: 16px 20px; }
+    .nav-links { display: none; }
+    .hero { padding: 100px 20px 60px; }
+    section { padding: 60px 20px; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .score-demo { grid-template-columns: 1fr; }
+    .metrics-grid { grid-template-columns: 1fr; }
+    .pipeline { flex-direction: column; }
+    .pipe-step { border-right: 1px solid var(--border); border-bottom: none; }
+    .pipe-step:last-child { border-bottom: 1px solid var(--border); }
+    .pipe-step::after { display: none; }
+    .stat-row { flex-direction: column; }
+    .stat-item { border-right: none; border-bottom: 1px solid var(--border); }
+    footer { flex-direction: column; gap: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="glow-orb"></div>
+<div class="glow-orb-2"></div>
+
+<nav>
+  <div class="nav-logo">DeFi<span>CreditScore</span></div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#pipeline">Pipeline</a>
+    <a href="#models">Models</a>
+    <a href="#api">API</a>
+  </div>
+  <span class="nav-badge">v1.0.0 · MIT</span>
+</nav>
+
+<main>
+
+<!-- ── HERO ── -->
+<div class="hero">
+  <div class="hero-eyebrow">ML · SCIKIT-LEARN · FASTAPI · ON-CHAIN</div>
+  <h1 class="hero-title">
+    On-Chain<br>
+    <span class="accent">Credit</span><br>
+    <span class="dim">Intelligence</span>
+  </h1>
+  <p class="hero-sub">
+    Score any wallet's creditworthiness from historical on-chain behavior.
+    Enable undercollateralized DeFi lending without traditional credit checks.
+  </p>
+  <div class="hero-actions">
+    <a href="https://github.com/Rish0x29/defi-credit-score" class="btn-primary">
+      View on GitHub ↗
+    </a>
+    <a href="#api" class="btn-secondary">API Docs</a>
+  </div>
+
+  <div class="stat-row reveal">
+    <div class="stat-item">
+      <div class="stat-num">0.924<span class="unit"> AUC</span></div>
+      <div class="stat-label">ROC-AUC SCORE</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">33<span class="unit">+</span></div>
+      <div class="stat-label">ON-CHAIN FEATURES</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">3<span class="unit">×</span></div>
+      <div class="stat-label">ENSEMBLE MODELS</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">300<span class="unit">–850</span></div>
+      <div class="stat-label">FICO-STYLE RANGE</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── FEATURES ── -->
+<section id="features">
+  <div class="section-tag">01 — FEATURE ENGINEERING</div>
+  <h2 class="section-title">22 Raw Signals.<br>11 Derived Insights.</h2>
+  <p class="section-sub">Six behavioral categories extracted from raw on-chain history, engineered into high-signal creditworthiness features.</p>
+
+  <div class="feature-grid reveal">
+    <div class="feature-cell">
+      <div class="feature-icon">⏱</div>
+      <div class="feature-name">Activity & History</div>
+      <div class="feature-desc">Wallet age, total transaction count, active days — establishing temporal credibility and usage consistency.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon">✓</div>
+      <div class="feature-name">Repayment Behavior</div>
+      <div class="feature-desc">On-time vs late vs defaulted loan ratio. Weighted repayment quality score accounting for volume and consistency.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon">◈</div>
+      <div class="feature-name">Liquidity Signals</div>
+      <div class="feature-desc">Average ETH balance, balance volatility, stability score. Penalizes erratic balance patterns that predict default risk.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon">⬡</div>
+      <div class="feature-name">Protocol Interaction</div>
+      <div class="feature-desc">Protocols used, chains active on, governance votes cast. Cross-protocol breadth signals long-term DeFi commitment.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon">⚠</div>
+      <div class="feature-name">Risk Signals</div>
+      <div class="feature-desc">Liquidation events, flash loan usage ratio. Default severity combines default rate × liquidation exposure — top predictor at 31.7% importance.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon">◎</div>
+      <div class="feature-name">DeFi Yield Behavior</div>
+      <div class="feature-desc">LP positions, staking duration, NFT holdings. Active yield participation signals long-term protocol alignment.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── PIPELINE ── -->
+<section id="pipeline">
+  <div class="section-tag">02 — ARCHITECTURE</div>
+  <h2 class="section-title">End-to-End Pipeline</h2>
+
+  <div class="pipeline reveal">
+    <div class="pipe-step">
+      <div class="pipe-num">01</div>
+      <div class="pipe-name">Raw On-Chain Data</div>
+      <div class="pipe-detail">The Graph / Dune / Flipside Crypto subgraphs. 22 features per wallet.</div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-num">02</div>
+      <div class="pipe-name">Feature Engineering</div>
+      <div class="pipe-detail">11 derived signals. Default severity, repayment quality, DeFi breadth, recency decay.</div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-num">03</div>
+      <div class="pipe-name">Ensemble ML</div>
+      <div class="pipe-detail">LogReg + Random Forest + GBT. Calibrated probabilities. 5-fold CV.</div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-num">04</div>
+      <div class="pipe-name">Score Mapping</div>
+      <div class="pipe-detail">Probability → FICO-style 300–850 score. Band classification. Loan limit assignment.</div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-num">05</div>
+      <div class="pipe-name">REST API</div>
+      <div class="pipe-detail">FastAPI endpoint. Pydantic validation. Docker-ready. &lt;50ms latency.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SCORE DEMO ── -->
+<section>
+  <div class="section-tag">03 — SCORING OUTPUT</div>
+  <h2 class="section-title">Full Underwriting Report</h2>
+
+  <div class="score-demo reveal">
+    <div class="score-card">
+      <div class="score-card-header">
+        <div class="dot dot-green"></div>
+        <div class="dot dot-amber"></div>
+        <div class="dot dot-red"></div>
+        <span>wallet_score_report.json</span>
+      </div>
+      <div class="score-card-body">
+        <div class="big-score">849</div>
+        <div class="score-band-txt">EXCELLENT</div>
+        <div class="score-bar-track">
+          <div class="score-bar-fill"></div>
+          <div class="score-bar-needle"></div>
+        </div>
+        <div class="score-factors">
+          <div class="factor-row">
+            <div class="factor-indicator pos"></div>
+            Strong repayment track record (94%)
+          </div>
+          <div class="factor-row">
+            <div class="factor-indicator pos"></div>
+            Established wallet age (720 days)
+          </div>
+          <div class="factor-row">
+            <div class="factor-indicator pos"></div>
+            Broad DeFi participation (6 protocols)
+          </div>
+          <div class="factor-row">
+            <div class="factor-indicator pos"></div>
+            Active governance participant
+          </div>
+          <div class="factor-row">
+            <div class="factor-indicator pos"></div>
+            Stable balance history
+          </div>
+        </div>
+        <div class="decision-box">
+          <span class="decision-label">Loan Decision</span>
+          <span class="decision-val">APPROVE — 30% balance</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <div class="dot dot-green"></div>
+        <div class="dot dot-amber"></div>
+        <div class="dot dot-red"></div>
+        <span>POST /score</span>
+      </div>
+      <div class="code-body">
+<span class="c"># Request</span><br>
+<span class="k">curl</span> -X POST <span class="s">http://localhost:8000/score</span> \<br>
+&nbsp;&nbsp;-H <span class="s">"Content-Type: application/json"</span> \<br>
+&nbsp;&nbsp;-d <span class="s">'{"repayment_rate": 0.94,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"wallet_age_days": 720,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"loans_defaulted": 0, ...}'</span><br>
+<br>
+<span class="c"># Response</span><br>
+{<br>
+&nbsp;&nbsp;<span class="n">"credit_score"</span>: <span class="v">849</span>,<br>
+&nbsp;&nbsp;<span class="n">"band"</span>: <span class="s">"Excellent"</span>,<br>
+&nbsp;&nbsp;<span class="n">"decision"</span>: <span class="s">"APPROVE"</span>,<br>
+&nbsp;&nbsp;<span class="n">"creditworthiness_prob"</span>: <span class="v">0.9978</span>,<br>
+&nbsp;&nbsp;<span class="n">"max_loan_pct_balance"</span>: <span class="v">0.30</span>,<br>
+&nbsp;&nbsp;<span class="n">"risk_factors"</span>: [],<br>
+&nbsp;&nbsp;<span class="n">"positive_factors"</span>: [<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="s">"Strong repayment track record"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="s">"Broad DeFi participation"</span><br>
+&nbsp;&nbsp;]<br>
+}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── MODEL METRICS ── -->
+<section id="models">
+  <div class="section-tag">04 — MODEL PERFORMANCE</div>
+  <h2 class="section-title">Three Models. One Best.</h2>
+  <p class="section-sub">Trained on 1,600 wallets, evaluated on 400. Logistic Regression wins — engineered features make the decision surface near-linear.</p>
+
+  <div class="metrics-grid reveal">
+    <div class="metric-block best">
+      <div class="model-name">LOGISTIC REGRESSION ⭐ BEST</div>
+      <div class="auc-val">0.924</div>
+      <div class="auc-label">ROC-AUC · Avg Precision: 0.891</div>
+      <div class="auc-bar-track">
+        <div class="auc-bar-fill" style="width:92.4%;background:var(--green)"></div>
+      </div>
+    </div>
+    <div class="metric-block second">
+      <div class="model-name">RANDOM FOREST</div>
+      <div class="auc-val">0.909</div>
+      <div class="auc-label">ROC-AUC · Avg Precision: 0.869</div>
+      <div class="auc-bar-track">
+        <div class="auc-bar-fill" style="width:90.9%;background:var(--blue)"></div>
+      </div>
+    </div>
+    <div class="metric-block third">
+      <div class="model-name">GRADIENT BOOSTING</div>
+      <div class="auc-val">0.907</div>
+      <div class="auc-label">ROC-AUC · Avg Precision: 0.855</div>
+      <div class="auc-bar-track">
+        <div class="auc-bar-fill" style="width:90.7%;background:var(--amber)"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── ROADMAP ── -->
+<section id="api">
+  <div class="section-tag">05 — PRODUCTION ROADMAP</div>
+  <h2 class="section-title">What's Next</h2>
+  <div class="feature-grid reveal" style="margin-top:40px">
+    <div class="feature-cell">
+      <div class="feature-name">Real Data Integration</div>
+      <div class="feature-desc">The Graph subgraphs for Aave V3, Compound, Morpho. Replace synthetic data with live indexer feeds.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-name">Temporal Windows</div>
+      <div class="feature-desc">30/90/180-day rolling feature windows. Capture behavioral trends, not just lifetime aggregates.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-name">On-Chain Attestation</div>
+      <div class="feature-desc">EAS (Ethereum Attestation Service) integration. Wallets carry verifiable score proofs on-chain.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-name">Sybil Resistance</div>
+      <div class="feature-desc">Wallet clustering to detect manufactured loan history. Graph-based identity consolidation.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-name">ZK Score Proofs</div>
+      <div class="feature-desc">Prove creditworthiness above threshold without revealing wallet address. Privacy-preserving underwriting.</div>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-name">NeuraMesh Integration</div>
+      <div class="feature-desc">Score-gated undercollateralized compute credits. NMESH stakers earn yield on approved credit pools.</div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="footer-left">Built by Rish0x29 · MIT License · scikit-learn + FastAPI</div>
+  <div class="footer-links">
+    <a href="https://github.com/Rish0x29/defi-credit-score">GitHub</a>
+    <a href="https://github.com/Rish0x29/defi-credit-score#readme">Docs</a>
+    <a href="https://github.com/Rish0x29/NeuraMesh">NeuraMesh</a>
+  </div>
+</footer>
+
+<script>
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  // Animate score bar needle
+  setTimeout(() => {
+    const needle = document.querySelector('.score-bar-needle');
+    const fill   = document.querySelector('.score-bar-fill');
+    if (needle) { needle.style.transition = 'left 1.2s cubic-bezier(.16,1,.3,1)'; }
+    if (fill)   { fill.style.transition   = 'width 1.2s cubic-bezier(.16,1,.3,1)'; }
+  }, 300);
+</script>
+</body>
+</html>
